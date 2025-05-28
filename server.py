@@ -1,10 +1,21 @@
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import mimetypes
 import os
+import subprocess
 
 class ServerException(Exception):
     """For internal error reporting."""
     pass
+
+class case_cgi_file(object):
+    '''Something runnable.'''
+
+    def test(self, handler):
+        return os.path.isfile(handler.full_path) and \
+               handler.full_path.endswith('.py')
+    
+    def act(self, handler):
+        handler.run_cgi(handler.full_path)
 
 class case_directory_index_file(object):
     '''Serve index.html page for a directory.'''
@@ -66,11 +77,14 @@ class RequestHandler(BaseHTTPRequestHandler):
     If anything goes wrong, an error page is constructed.
     '''
 
-    Cases = [case_no_file,
-             case_existing_file,
-             case_directory_index_file,
-             case_directory_no_index_file,
-             case_always_fail]
+    Cases = [
+            case_no_file,
+            case_cgi_file,
+            case_existing_file,
+            case_directory_index_file,
+            case_directory_no_index_file,
+            case_always_fail
+        ]
 
 #     # Page to send back.
 #     Page = '''\
@@ -123,6 +137,32 @@ class RequestHandler(BaseHTTPRequestHandler):
         # except Exception as msg:
         #     self.handle_error(msg)
         
+    def run_cgi(self, full_path):
+    
+        try:
+            print("Running CGI:", full_path)
+            result = subprocess.run(
+                ["python", full_path],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True
+            )
+            print("CGI stdout:", result.stdout)
+            print("CGI stderr:", result.stderr)
+            if result.returncode == 0:
+                self.send_content(result.stdout)
+            else:
+                self.handle_error(result.stderr)
+        except Exception as e:
+            self.handle_error(str(e))
+
+        
+        # child_stdin, child_stdout = os.popen2(cmd)
+        # child_stdin.close()
+        # data = child_stdout.read()
+        # child_stdout.close()
+        # self.send_content(data)
+
     def handle_file(self, full_path):
         try:
             with open(full_path, 'rb') as reader:
